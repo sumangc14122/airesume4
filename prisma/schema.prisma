@@ -1,0 +1,262 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+model Resume {
+  id     String @id @default(cuid())
+  userId String
+
+  title       String?
+  description String?
+
+  photoUrl    String?
+  colorHex    String  @default("#000000")
+  borderStyle String  @default("squircle")
+  summary     String?
+  firstName   String?
+  lastName    String?
+  jobTitle    String?
+  city        String?
+  country     String?
+  phone       String?
+  email       String?
+
+  workExperiences WorkExperience[]
+  educations      Education[]
+  skills          String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("resumes")
+}
+
+model WorkExperience {
+  id String @id @default(cuid())
+
+  position    String?
+  company     String?
+  startDate   DateTime?
+  endDate     DateTime?
+  description String?
+
+  resumeId String
+  resume   Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("work_experiences")
+}
+
+model Education {
+  id String @id @default(cuid())
+
+  degree    String?
+  school    String?
+  startDate DateTime?
+  endDate   DateTime?
+
+  resumeId String
+  resume   Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("educations")
+}
+
+model CoverLetterTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  prompt    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserSubscription {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  stripeCustomerId        String   @unique
+  stripeSubscriptionId    String   @unique
+  stripePriceId           String
+  stripeCurrentPeriodEnd  DateTime
+  stripeCancelAtPeriodEnd Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_subscriptions")
+}
+
+model JobApplication {
+  id             String    @id @default(cuid())
+  userId         String // Clerk user ID
+  companyName    String
+  jobTitle       String
+  coverLetterUrl String? // Optional - file link
+  resumeUrl      String? // Optional - file link
+  applyLink      String? // Optional - job link
+  submitted      Boolean   @default(false)
+  followUp       Boolean   @default(false)
+  finalResult    String? // Pending, Rejected, Interview, etc.
+  mistakeNotes   String? // Any reflection or notes
+  resultDate     DateTime?
+  appliedDate    DateTime  @default(now())
+  reminderDate   DateTime? // ✅ NEW
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Blog {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  summary   String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  fileUrl   String
+  type      String // NEW: e.g., "resume" or "cover_letter"
+  createdAt DateTime @default(now())
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Hero section
+  name           String
+  profilePicture String? // URL to an avatar or photo
+  tagline        String?
+
+  // About
+  bio        String?
+  jobTitle   String?
+  socialLink String?
+  industry   String?
+
+  // Resume & Cover
+  resumeUrl      String?
+  coverLetterUrl String?
+
+  // New: Skills & Projects
+  skills   String? // comma‑separated list, e.g. “JavaScript,React,SQL”
+  projects String? // JSON stringified array, e.g. `[{"name":"Proj1","link":"…"}]`
+
+  // back‑relations:
+  reviewRequests ReviewRequest[] // ← matches ReviewRequest.profile
+  reviewComments ReviewComment[] // ← matches ReviewComment.reviewerProfile
+
+  isPublic         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  stripeCustomerId String?
+  isPro            Boolean  @default(false)
+
+  posts        Post[]        @relation("ProfilePosts")
+  suggestions  Suggestion[]
+  annotations  Annotation[]
+  chatSessions ChatSession[]
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  profileId   String
+  profile     Profile  @relation("ProfilePosts", fields: [profileId], references: [id])
+  title       String?
+  content     String
+  isAnonymous Boolean  @default(false)
+  type        PostType @default(SUCCESS)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum PostType {
+  SUCCESS
+  BLOG
+  REVIEW
+}
+
+model ReviewRequest {
+  id          String          @id @default(cuid())
+  profile     Profile         @relation(fields: [profileId], references: [id])
+  profileId   String
+  resumeUrl   String
+  description String? // optional instructions for reviewers
+  isPublic    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  comments    ReviewComment[]
+}
+
+model ReviewComment {
+  id                String        @id @default(cuid())
+  request           ReviewRequest @relation(fields: [requestId], references: [id])
+  requestId         String
+  reviewerProfile   Profile       @relation(fields: [reviewerProfileId], references: [id])
+  reviewerProfileId String
+  content           String
+  section           String? // e.g. "Education", "Skills" (optional)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model Suggestion {
+  id         String   @id @default(cuid())
+  profile    Profile  @relation(fields: [profileId], references: [id])
+  profileId  String
+  snippet    String // the text the user highlighted
+  suggestion String // the rewritten text from AI
+  createdAt  DateTime @default(now())
+
+  @@index([profileId], name: "idx_suggestion_profile")
+}
+
+model Annotation {
+  id        String   @id @default(cuid())
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  profileId String
+  snippet   String // the highlighted text
+  comment   String // user’s note
+  createdAt DateTime @default(now())
+
+  @@index([profileId], name: "idx_annotation_profile")
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  profileId String
+  name      String // e.g. "Interview Prep 2025-05-04"
+  topic     String // e.g. "Interview questions"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  session   ChatSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  role      String // "system" | "user" | "assistant"
+  content   String
+  createdAt DateTime    @default(now())
+}
